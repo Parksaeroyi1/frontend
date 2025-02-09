@@ -7,14 +7,15 @@ const userDisplay = document.getElementById("userDisplay");
 async function getData() {
   const url = "http://localhost:8000/notesbyuser";
   try {
-    const response = await fetch( url, {
+    const response = await fetch(url, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
-      body: JSON.stringify({usernameID: localStorage.getItem("usernameID")})
-
+      body: JSON.stringify({ usernameID: localStorage.getItem("usernameID") })
     });
+
     console.log("trigger", localStorage.getItem("usernameID"));
 
     const json = await response.json();
@@ -25,11 +26,19 @@ async function getData() {
       const li = document.createElement("li");
       li.dataset.id = item._id; // Store the note's id for deletion
 
+      // Format timestamps
+      const createdAt = new Date(item.createdAt).toLocaleString();
+      const updatedAt = new Date(item.updatedAt).toLocaleString();
+
+      // Only show "Last edited" if the note was actually edited
+      let editedText = createdAt !== updatedAt ? `<p class="updated-at">Last edited: ${updatedAt}</p>` : "";
+
       li.innerHTML = `
         <h2>${item.title}</h2>
         <p>${item.description}</p>
-        <p class="created-by">Created by: ${ localStorage.getItem("username")};
-        <p class="last-edited-by">Last edited by: ${item.lastEditedBy}</p>
+        <p class="created-by">Created by: ${localStorage.getItem("username")}</p>
+        <p class="created-at">Created at: ${createdAt}</p>
+        ${editedText} <!-- Show last edited only if different -->
         <button class="edit-btn" onclick="editNoteHandler(event)">Edit</button>
         <button class="delete-btn" onclick="deleteNoteHandler(event)">×</button>
       `;
@@ -45,7 +54,10 @@ async function getData() {
 async function deleteNote(noteId) {
   try {
     const response = await fetch(`http://localhost:8000/notes/${noteId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
     });
     if (response.ok) {
       console.log('Note deleted successfully');
@@ -95,6 +107,11 @@ async function updateNote(event) {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        alert("Session expired. Please log in again.");
+        logoutUser();
+        return;
+      }
       throw new Error(`Response status: ${response.status}`);
     }
 
@@ -102,10 +119,30 @@ async function updateNote(event) {
     console.log("Updated Note:", updatedNote);
 
     const li = document.querySelector(`li[data-id="${noteId}"]`);
-    li.querySelector('h2').innerText = updatedNote.title;
-    li.querySelector('p').innerText = updatedNote.description;
-    li.querySelector('.created-by').innerText = `Created by: ${updatedNote.createdBy}`;
-    li.querySelector('.last-edited-by').innerText = `Last edited by: ${updatedNote.lastEditedBy}`;
+    if (li) {
+      li.querySelector('h2').innerText = updatedNote.title;
+      li.querySelector('p').innerText = updatedNote.description;
+
+      const createdAt = new Date(updatedNote.createdAt).toLocaleString();
+      const updatedAt = new Date(updatedNote.updatedAt).toLocaleString();
+      let editedText = createdAt !== updatedAt ? `<p class="updated-at">Last edited: ${updatedAt}</p>` : "";
+
+      const createdByElement = li.querySelector('.created-by');
+      const createdAtElement = li.querySelector('.created-at');
+      const updatedAtElement = li.querySelector('.updated-at');
+
+      if (createdByElement) {
+        createdByElement.innerText = `Created by: ${updatedNote.createdBy}`;
+      }
+      if (createdAtElement) {
+        createdAtElement.innerText = `Created at: ${createdAt}`;
+      }
+      if (updatedAtElement) {
+        updatedAtElement.innerHTML = editedText;
+      } else {
+        li.insertAdjacentHTML('beforeend', editedText);
+      }
+    }
 
     // Clear the form inputs
     titleInput.value = "";
@@ -150,14 +187,25 @@ async function createNote(event) {
     const createdNote = await response.json();
     console.log("Created Note:", createdNote);
 
+    // Check if createdAt and updatedAt fields are present
+    if (!createdNote.createdAt || !createdNote.updatedAt) {
+      throw new Error("Missing createdAt or updatedAt fields in the response");
+    }
+
+    const createdAt = new Date(createdNote.createdAt).toLocaleString();
+    const updatedAt = new Date(createdNote.updatedAt).toLocaleString();
+
+    let editedText = createdAt !== updatedAt ? `<p class="updated-at">Last edited: ${updatedAt}</p>` : "";
+
     // Add the new note to the list in the UI
     const li = document.createElement("li");
     li.dataset.id = createdNote._id;
     li.innerHTML = `
       <h2>${createdNote.title}</h2>
       <p>${createdNote.description}</p>
-      <p class="created-by">Created by: ${createdNote.createdBy}</p>
-      <p class="last-edited-by">Last edited by: ${createdNote.lastEditedBy}</p>
+      <p class="created-by">Created by: ${localStorage.getItem("username")}</p>
+      <p class="created-at">Created at: ${createdAt}</p>
+      ${editedText}
       <button class="edit-btn" onclick="editNoteHandler(event)">Edit</button>
       <button class="delete-btn" onclick="deleteNoteHandler(event)">×</button>
     `;
@@ -205,30 +253,45 @@ async function loginUser(event) {
 
   const user = document.getElementById("loginUsername").value;
   const pass = document.getElementById("loginPassword").value;
-
-  console.log(user, pass);
+  const successMessage = document.getElementById("loginSuccess");
+  const errorMessage = document.getElementById("loginError");
 
   const url = "http://localhost:8000/login";
   try {
-    const response = await fetch( url, {
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ username:user, password:pass })
+      body: JSON.stringify({ username: user, password: pass })
     });
 
-
     const json = await response.json();
-   if(json.username){
-    localStorage.setItem("usernameID", json._id);
-    localStorage.setItem("username", json.username);
 
-    showNotesApp();
-   }
-   
+    if (response.ok && json.username) {
+      localStorage.setItem("usernameID", json._id);
+      localStorage.setItem("username", json.username);
+      localStorage.setItem("token", json.token);
+
+      // Show success message
+      successMessage.innerText = "Login successful! Redirecting...";
+      successMessage.style.display = "block";
+      errorMessage.style.display = "none"; // Hide error if login is successful
+
+      // Delay switching to the notes app to show the success message
+      setTimeout(() => {
+        showNotesApp();
+      }, 1000); // 1 second delay
+
+    } else {
+      throw new Error("Invalid username or password"); // Handle incorrect login
+    }
   } catch (error) {
-    console.error(error.message);
+    successMessage.style.display = "none"; // Hide success message if there's an error
+    errorMessage.innerText = error.message;
+    errorMessage.style.display = "block"; // Show the error message
+
+    console.error("Error logging in:", error.message);
   }
 }
 
@@ -236,6 +299,7 @@ function logoutUser() {
   note.innerHTML = '';
   localStorage.removeItem("token");
   localStorage.removeItem("usernameID");
+  localStorage.removeItem("username");
   showLoginForm();
 }
 
@@ -265,4 +329,8 @@ document.getElementById("loginForm").addEventListener("submit", loginUser);
 noteForm.addEventListener("submit", createNote);
 
 // Show the registration form by default
-showRegistrationForm();
+if (localStorage.getItem("token")) {
+  showNotesApp();
+} else {
+  showRegistrationForm();
+}
