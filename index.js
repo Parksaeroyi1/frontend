@@ -2,21 +2,23 @@ const note = document.querySelector(".notes");
 const noteForm = document.getElementById("noteForm");
 const titleInput = document.getElementById("title");
 const descriptionInput = document.getElementById("description");
+const userDisplay = document.getElementById("userDisplay");
 
 async function getData() {
-  const url = "http://localhost:8000/notes";
+  const url = "http://localhost:8000/notesbyuser";
   try {
-    const response = await fetch(url, {
+    const response = await fetch( url, {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({usernameID: localStorage.getItem("usernameID")})
+
     });
-    if (!response.ok) {
-      throw new Error(`Response status: ${response.status}`);
-    }
+    console.log("trigger", localStorage.getItem("usernameID"));
 
     const json = await response.json();
-    console.log(json);
+    console.log("called", json);
     note.innerHTML = '';
 
     json.forEach(item => {
@@ -26,6 +28,8 @@ async function getData() {
       li.innerHTML = `
         <h2>${item.title}</h2>
         <p>${item.description}</p>
+        <p class="created-by">Created by: ${ localStorage.getItem("username")};
+        <p class="last-edited-by">Last edited by: ${item.lastEditedBy}</p>
         <button class="edit-btn" onclick="editNoteHandler(event)">Edit</button>
         <button class="delete-btn" onclick="deleteNoteHandler(event)">×</button>
       `;
@@ -41,11 +45,7 @@ async function getData() {
 async function deleteNote(noteId) {
   try {
     const response = await fetch(`http://localhost:8000/notes/${noteId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/json'
-      }
+      method: 'DELETE'
     });
     if (response.ok) {
       console.log('Note deleted successfully');
@@ -104,6 +104,8 @@ async function updateNote(event) {
     const li = document.querySelector(`li[data-id="${noteId}"]`);
     li.querySelector('h2').innerText = updatedNote.title;
     li.querySelector('p').innerText = updatedNote.description;
+    li.querySelector('.created-by').innerText = `Created by: ${updatedNote.createdBy}`;
+    li.querySelector('.last-edited-by').innerText = `Last edited by: ${updatedNote.lastEditedBy}`;
 
     // Clear the form inputs
     titleInput.value = "";
@@ -125,7 +127,8 @@ async function createNote(event) {
 
   const newNote = {
     title: title,
-    description: description
+    description: description,
+    usernameID: localStorage.getItem("usernameID")
   };
 
   const url = "http://localhost:8000/notes";
@@ -153,6 +156,8 @@ async function createNote(event) {
     li.innerHTML = `
       <h2>${createdNote.title}</h2>
       <p>${createdNote.description}</p>
+      <p class="created-by">Created by: ${createdNote.createdBy}</p>
+      <p class="last-edited-by">Last edited by: ${createdNote.lastEditedBy}</p>
       <button class="edit-btn" onclick="editNoteHandler(event)">Edit</button>
       <button class="delete-btn" onclick="deleteNoteHandler(event)">×</button>
     `;
@@ -167,8 +172,97 @@ async function createNote(event) {
   }
 }
 
-// Attach the createNote function to the form submit event
+async function registerUser(event) {
+  event.preventDefault();
+
+  const username = document.getElementById("registerUsername").value;
+  const password = document.getElementById("registerPassword").value;
+
+  try {
+    const response = await fetch("http://localhost:8000/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username, password })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Response status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("User registered:", data);
+    showLoginForm();
+
+  } catch (error) {
+    console.error("Error registering user:", error.message);
+  }
+}
+
+async function loginUser(event) {
+  event.preventDefault();
+
+  const user = document.getElementById("loginUsername").value;
+  const pass = document.getElementById("loginPassword").value;
+
+  console.log(user, pass);
+
+  const url = "http://localhost:8000/login";
+  try {
+    const response = await fetch( url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username:user, password:pass })
+    });
+
+
+    const json = await response.json();
+   if(json.username){
+    localStorage.setItem("usernameID", json._id);
+    localStorage.setItem("username", json.username);
+
+    showNotesApp();
+   }
+   
+  } catch (error) {
+    console.error(error.message);
+  }
+}
+
+function logoutUser() {
+  note.innerHTML = '';
+  localStorage.removeItem("token");
+  localStorage.removeItem("usernameID");
+  showLoginForm();
+}
+
+function showRegistrationForm() {
+  document.getElementById("registrationForm").style.display = "block";
+  document.getElementById("loginForm").style.display = "none";
+  document.getElementById("notesApp").style.display = "none";
+}
+
+function showLoginForm() {
+  document.getElementById("registrationForm").style.display = "none";
+  document.getElementById("loginForm").style.display = "block";
+  document.getElementById("notesApp").style.display = "none";
+}
+
+function showNotesApp() {
+  document.getElementById("registrationForm").style.display = "none";
+  document.getElementById("loginForm").style.display = "none";
+  document.getElementById("notesApp").style.display = "block";
+  userDisplay.innerText = `Welcome, ${localStorage.getItem("username")}`;
+  getData();
+}
+
+// Attach event listeners to the forms
+document.getElementById("registrationForm").addEventListener("submit", registerUser);
+document.getElementById("loginForm").addEventListener("submit", loginUser);
 noteForm.addEventListener("submit", createNote);
 
-// Fetch and display the notes when the page loads
-getData();
+// Show the registration form by default
+showRegistrationForm();

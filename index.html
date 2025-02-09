@@ -24,7 +24,7 @@
             text-align: center;
         }
 
-        #noteForm {
+        #noteForm, #registrationForm, #loginForm {
             background-color: #1c1c1c;
             padding: 20px;
             border-radius: 15px;
@@ -124,15 +124,36 @@
     <div>
         <h1>Notes</h1>
 
-        <!-- Form to create a new note -->
-        <form id="noteForm">
-            <input type="text" id="title" placeholder="Title" required />
-            <textarea id="description" placeholder="Description" required></textarea>
-            <button type="submit">Add Note</button>
-        </form>
+        <!-- Registration and Login Forms -->
+        <div id="authForms">
+            <!-- Registration Form -->
+            <form id="registrationForm">
+                <input type="text" id="registerUsername" placeholder="Username" required />
+                <input type="password" id="registerPassword" placeholder="Password" required />
+                <button type="submit">Register</button>
+                <p>Already have an account? <a href="#" onclick="showLoginForm()">Log in</a></p>
+            </form>
 
-        <!-- List of notes -->
-        <ul class="notes"></ul>
+            <!-- Login Form -->
+            <form id="loginForm" style="display: none;">
+                <input type="text" id="loginUsername" placeholder="Username" required />
+                <input type="password" id="loginPassword" placeholder="Password" required />
+                <button type="submit">Log in</button>
+                <p>Don't have an account? <a href="#" onclick="showRegistrationForm()">Register</a></p>
+            </form>
+        </div>
+
+        <!-- Notes App -->
+        <div id="notesApp" style="display: none;">
+            <p id="userDisplay"></p>
+            <button onclick="logoutUser()">Logout</button>
+            <form id="noteForm">
+                <input type="text" id="title" placeholder="Title" required />
+                <textarea id="description" placeholder="Description" required></textarea>
+                <button type="submit">Add Note</button>
+            </form>
+            <ul class="notes"></ul>
+        </div>
     </div>
 
     <!-- Include the JavaScript file -->
